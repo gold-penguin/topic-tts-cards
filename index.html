@@ -633,6 +633,7 @@ function chunk(line){
 function speakable(t){
   return t
     .replace(/^([\s　]*([-–•·▪◦○●■□※*]+|ㄴ+(?=\S)))+\s*/u, '')
+    .replace(/(\d)\.(?=\d)/g, '$1쩜')
     .replace(/<([^<>]{1,40})>/g, '$1.')
     .replace(/[\[\]【】「」『』]/g, ' ')
     .replace(/\s*(→|⇒|->|=>)\s*/g, ', ')
