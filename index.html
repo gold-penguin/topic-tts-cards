@@ -640,8 +640,30 @@ function speakable(t){
     .replace(/\s+\/\s+|\s*\/\s*(?=[가-힣])/g, ', ')
     .replace(/\bvs\.?\b/gi, ' 대 ')
     .replace(/[|]/g, ', ')
+    .replace(/(?<![A-Za-z])[A-Z]{2,}(?![A-Za-z])/g, w => isWordLike(w) ? w : [...w].map(ch => LETTERS[ch.charCodeAt(0) - 65]).join(''))
     .replace(/\s{2,}/g, ' ')
     .trim();
+}
+// all-caps acronyms (API, SDLC…) are spelled out letter by letter; all-caps that read as words (REST, SOAP, AND…) are left alone
+const LETTERS = '에이 비 씨 디 이 에프 지 에이치 아이 제이 케이 엘 엠 엔 오 피 큐 알 에스 티 유 브이 더블유 엑스 와이 제트'.split(' ');
+const CAPS_WORDS = new Set(('OR IF IN ON TO OF IS AS BE BY NO GO UP DO ' +
+  'AND NOT NOR XOR LAN WAN RAM ROM CAN BUS KEY SET GET PUT RUN ADD SUM MAX MIN NET WEB APP BOT MAP LOG TAG BIT BUG ' +
+  'ALL ANY END NEW OLD TOP LOW HIGH JSON OAUTH').split(' '));
+const CAPS_SPELL = new Set('IEEE'.split(' '));
+const ONSETS = new Set('BL BR CL CR DR FL FR GL GR PL PR SC SK SL SM SN SP ST SW TR TW TH SH CH WH PH QU SCR SPR STR SPL THR SHR'.split(' '));
+const CODAS = new Set('ST NT ND CK NG RT RD RK RM RN LD LT LK LM LP MP SK SP PT CT FT NK NCH TCH SH CH TH GH RCH RST NTS'.split(' '));
+function isWordLike(w){
+  if (CAPS_SPELL.has(w)) return false;
+  if (CAPS_WORDS.has(w)) return true;
+  if (w.length < 4) return false;
+  const runs = w.match(/[AEIOU]+|[^AEIOU]+/g);
+  if (!runs.some(r => /[AEIOU]/.test(r))) return false;
+  return runs.every((r, k) => {
+    if (/[AEIOU]/.test(r)) return r.length <= 2;
+    if (k === 0) return r.length === 1 || ONSETS.has(r);
+    if (k === runs.length - 1) return r.length === 1 || CODAS.has(r);
+    return r.length <= 3;
+  });
 }
 let voices = [];
 function loadVoices(){
@@ -652,22 +674,26 @@ function loadVoices(){
 }
 function curVoice(){ return voices.find(v => v.voiceURI === S.settings.voice) || voices.find(v => /google/i.test(v.name)) || voices[0] || null; }
 
+// the rest of the card is queued at once so the speech engine keeps going even when the page is throttled with the screen off
 function speakFrom(i){
   const tok = ++S.token;
-  if (i >= S.segs.length){ onCardEnd(tok); return; }
-  S.seg = i; savePos(); highlight();
-  const text = speakable(S.segs[i].text);
-  if (!text){ speakFrom(i + 1); return; }
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'ko-KR'; const v = curVoice(); if (v) u.voice = v;
-  u.rate = S.settings.rate;
-  u.onend = () => { if (tok === S.token && S.playing) speakFrom(i + 1); };
-  u.onerror = e => {
-    if (tok !== S.token) return;
-    if (e.error === 'interrupted' || e.error === 'canceled') return;
-    console.warn('tts error', e.error); if (S.playing) speakFrom(i + 1);
-  };
-  speechSynthesis.speak(u);
+  const items = [];
+  for (let j = i; j < S.segs.length; j++){ const t = speakable(S.segs[j].text); if (t) items.push([j, t]); }
+  if (!items.length){ onCardEnd(tok); return; }
+  S.seg = items[0][0]; savePos(); highlight(); updateMedia();
+  const v = curVoice(); let ended = false;
+  const finish = () => { if (!ended && tok === S.token && S.playing){ ended = true; onCardEnd(tok); } };
+  items.forEach(([j, text], k) => {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'ko-KR'; if (v) u.voice = v;
+    u.rate = S.settings.rate;
+    u.onstart = () => { if (tok === S.token && S.seg !== j){ S.seg = j; savePos(); highlight(); } };
+    if (k === items.length - 1){
+      u.onend = finish;
+      u.onerror = e => { if (e.error !== 'interrupted' && e.error !== 'canceled') finish(); };
+    } else u.onerror = e => { if (tok === S.token && e.error !== 'interrupted' && e.error !== 'canceled') console.warn('tts error', e.error); };
+    speechSynthesis.speak(u);
+  });
 }
 function onCardEnd(tok){
   markRead(S.card);
@@ -678,12 +704,12 @@ function onCardEnd(tok){
 }
 function play(fromSeg){
   if (!('speechSynthesis' in window)){ alert('이 브라우저는 음성 읽기를 지원하지 않아요. 크롬이나 사파리에서 열어 주세요.'); return; }
-  S.playing = true; setPlayIcon(); wake(true);
+  S.playing = true; setPlayIcon(); wake(true); keepAlive(true);
   speechSynthesis.cancel();
   const start = fromSeg != null ? fromSeg : (S.seg >= S.segs.length ? 0 : S.seg);
   setTimeout(() => { if (S.playing) speakFrom(start); }, 60);
 }
-function stop(){ S.playing = false; S.token++; speechSynthesis.cancel(); setPlayIcon(); wake(false); }
+function stop(){ S.playing = false; S.token++; speechSynthesis.cancel(); setPlayIcon(); wake(false); keepAlive(false); }
 function setPlayIcon(){ $('playBtn').textContent = S.playing ? '❚❚' : '▶'; }
 function go(i, seg){
   const n = sheet().cards.length; if (i < 0 || i >= n) return;
@@ -701,6 +727,47 @@ async function wake(on){
   }catch(e){}
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.playing) wake(true); });
+
+// a near-silent looping track makes the phone treat the page as a media player, so it isn't frozen when the screen turns off;
+// it also puts play/pause/next controls on the lock screen
+let bgAudio = null;
+function silentWav(){
+  const rate = 8000, n = rate * 2, buf = new ArrayBuffer(44 + n * 2), d = new DataView(buf);
+  const str = (o, s) => [...s].forEach((c, k) => d.setUint8(o + k, c.charCodeAt(0)));
+  str(0, 'RIFF'); d.setUint32(4, 36 + n * 2, true); str(8, 'WAVEfmt '); d.setUint32(16, 16, true);
+  d.setUint16(20, 1, true); d.setUint16(22, 1, true); d.setUint32(24, rate, true); d.setUint32(28, rate * 2, true);
+  d.setUint16(32, 2, true); d.setUint16(34, 16, true); str(36, 'data'); d.setUint32(40, n * 2, true);
+  for (let k = 0; k < n; k++) d.setInt16(44 + k * 2, Math.round((Math.random() - 0.5) * 6), true);
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+}
+function keepAlive(on){
+  try{
+    if (on){
+      if (!bgAudio){ bgAudio = new Audio(silentWav()); bgAudio.loop = true; bgAudio.volume = 1; }
+      bgAudio.play().catch(() => {});
+    } else if (bgAudio) bgAudio.pause();
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = on ? 'playing' : 'paused';
+  }catch(e){}
+}
+function updateMedia(){
+  if (!('mediaSession' in navigator) || !S.deck) return;
+  try{
+    const sh = sheet(), c = sh.cards[S.card]; if (!c) return;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: cardKey(sh, c).split('\n')[0],
+      artist: `${S.dom ? S.dom.name : ''} · ${S.card + 1}/${sh.cards.length}`,
+      album: '토픽 카드 읽기'
+    });
+  }catch(e){}
+}
+if ('mediaSession' in navigator){
+  const ms = navigator.mediaSession, on = (a, f) => { try{ ms.setActionHandler(a, f); }catch(e){} };
+  on('play', () => { if (S.deck && !S.playing) play(); });
+  on('pause', () => { if (S.playing) stop(); });
+  on('stop', () => { if (S.playing) stop(); });
+  on('nexttrack', () => { if (S.deck) go(S.card + 1, 0); });
+  on('previoustrack', () => { if (S.deck) go(S.card - 1, 0); });
+}
 
 /* ---------- loading ---------- */
 // each file becomes a domain; a file whose domain name already exists replaces that domain (progress kept by topic title)
