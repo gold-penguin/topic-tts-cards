@@ -648,7 +648,7 @@ function speakable(t){
     .trim();
 }
 // words with a fixed reading, matched in any letter case
-const READ_AS = { DDOS: '디도스', DRDOS: '디알도스', DOS: '도스', IEEE: '아이트리플이', IPSEC: '아이피섹', 'TCP/IP': '티씨피아이피', SAST: '사스트', DAST: '다스트', IAST: '이아스트', RASP: '래스프' };
+const READ_AS = { DDOS: '디도스', DRDOS: '디알도스', DOS: '도스', IEEE: '아이트리플이', IPSEC: '아이피섹', 'TCP/IP': '티씨피아이피', SAST: '사스트', DAST: '다스트', IAST: '이아스트', RASP: '래스프', OAUTH: '오오쓰' };
 const READ_AS_RE = new RegExp(`(?<![A-Za-z])(${Object.keys(READ_AS).join('|')})(?![A-Za-z])`, 'gi');
 // all-caps acronyms (API, SDLC…) are spelled out letter by letter; all-caps that read as words (REST, SOAP, AND…) are left alone
 const LETTERS = '에이 비 씨 디 이 에프 지 에이치 아이 제이 케이 엘 엠 엔 오 피 큐 알 에스 티 유 브이 더블유 엑스 와이 제트'.split(' ');
