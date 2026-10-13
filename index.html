@@ -636,7 +636,7 @@ function speakable(t){
     .replace(/(?<![\d.])802\.(\d+)([A-Za-z]*)(?![A-Za-z])/g, (_, n, s) => '팔공이쩜' + [...n].map(d => DIGITS[d]).join('') + [...s.toUpperCase()].map(ch => LETTERS[ch.charCodeAt(0) - 65]).join(''))
     .replace(/(\d)\.(?=\d)/g, '$1쩜')
     .replace(READ_AS_RE, w => READ_AS[w.toUpperCase()])
-    .replace(/(?<=[A-Za-z])\/(?=[A-Za-z])/g, ' ')
+    .replace(/(?<=[A-Za-z])\/(?=[A-Za-z가-힣])|(?<=[가-힣])\/(?=[A-Za-z])/g, ' ')
     .replace(/<([^<>]{1,40})>/g, '$1.')
     .replace(/[\[\]【】「」『』]/g, ' ')
     .replace(/\s*(→|⇒|->|=>)\s*/g, ', ')
