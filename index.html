@@ -635,6 +635,7 @@ function speakable(t){
     .replace(/^([\s　]*([-–•·▪◦○●■□※*]+|ㄴ+(?=\S)))+\s*/u, '')
     .replace(/(\d)\.(?=\d)/g, '$1쩜')
     .replace(READ_AS_RE, w => READ_AS[w.toUpperCase()])
+    .replace(/(?<=[A-Za-z])\/(?=[A-Za-z])/g, ' ')
     .replace(/<([^<>]{1,40})>/g, '$1.')
     .replace(/[\[\]【】「」『』]/g, ' ')
     .replace(/\s*(→|⇒|->|=>)\s*/g, ', ')
