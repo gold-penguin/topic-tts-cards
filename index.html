@@ -616,9 +616,13 @@ async function openDomain(id, autoplay){
 }
 
 /* ---------- speech ---------- */
+// mnemonics written as dotted single syllables (도.활.확.최, 도. 활. 확. 최) are read as one word, not split into sentences
+const MNEMONIC_RE = /(?<![가-힣])[가-힣](?:[ \t]*[.．。][ \t]*[가-힣](?![가-힣]))+/g;
 function chunk(line){
+  line = line.replace(MNEMONIC_RE, m => m.replace(/[ \t]*[.．。][ \t]*/g, ''));
   const out = []; const MAX = 90;
-  const sentences = line.match(/[^.!?。]+[.!?。]+(?=\s|$)|[^.!?。]+$|[.!?。]+/g) || [line];
+  // split only where sentence punctuation is followed by a space, so 3.14 or 도.활 stay whole
+  const sentences = line.split(/(?<=[.!?。])\s+/);
   for (let s of sentences){
     s = s.trim(); if (!s) continue;
     while (s.length > MAX){
@@ -631,6 +635,10 @@ function chunk(line){
   return out;
 }
 function speakable(t){
+  const s = speakText(t);
+  return /[\p{L}\p{N}]/u.test(s) ? s : '';
+}
+function speakText(t){
   return t
     .replace(/^([\s　]*([-–•·▪◦○●■□※*]+|ㄴ+(?=\S)))+\s*/u, '')
     .replace(/(?<![\d.])802\.(\d+)([A-Za-z]*)(?![A-Za-z])/g, (_, n, s) => '팔공이쩜' + [...n].map(d => DIGITS[d]).join('') + [...s.toUpperCase()].map(ch => LETTERS[ch.charCodeAt(0) - 65]).join(''))
