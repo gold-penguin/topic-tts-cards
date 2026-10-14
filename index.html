@@ -190,6 +190,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
     <button class="ghost" id="resetReadBtn">이 시트 읽음 기록 지우기</button>
     <button class="primary" id="closeSettings">닫기</button>
   </div>
+  <p style="margin:14px 0 0;font-size:12px;color:var(--muted);text-align:right">버전 <span id="verTxt"></span></p>
 </div></dialog>
 
 <dialog id="searchDlg"><div class="dlg">
@@ -617,9 +618,9 @@ async function openDomain(id, autoplay){
 
 /* ---------- speech ---------- */
 // mnemonics written as dotted single syllables (도.활.확.최, 도. 활. 확. 최) are read as one word, not split into sentences
-const MNEMONIC_RE = /(?<![가-힣])[가-힣](?:[ \t]*[.．。][ \t]*[가-힣](?![가-힣]))+/g;
+const MNEMONIC_RE = /(?<![가-힣])[가-힣](?:[ \t]*[.．。·•‧∙ㆍ・][ \t]*[가-힣](?![가-힣]))+/g;
 function chunk(line){
-  line = line.replace(MNEMONIC_RE, m => m.replace(/[ \t]*[.．。][ \t]*/g, ''));
+  line = line.replace(MNEMONIC_RE, m => m.replace(/[ \t]*[.．。·•‧∙ㆍ・][ \t]*/g, ''));
   const out = []; const MAX = 90;
   // split only where sentence punctuation is followed by a space, so 3.14 or 도.활 stay whole
   const sentences = line.split(/(?<=[.!?。])\s+/);
@@ -643,7 +644,7 @@ function speakText(t){
     .replace(/^([\s　]*([-–•·▪◦○●■□※*]+|ㄴ+(?=\S)))+\s*/u, '')
     .replace(/(?<![\d.])802\.(\d+)([A-Za-z]*)(?![A-Za-z])/g, (_, n, s) => '팔공이쩜' + [...n].map(d => DIGITS[d]).join('') + [...s.toUpperCase()].map(ch => LETTERS[ch.charCodeAt(0) - 65]).join(''))
     .replace(/(\d)\.(?=\d)/g, '$1쩜')
-    .replace(/(?<=[가-힣])\.(?=[가-힣])/g, '')
+    .replace(/(?<=[가-힣])[.．。](?=[가-힣])/g, '')
     .replace(READ_AS_RE, w => READ_AS[w.toUpperCase()])
     .replace(/(?<=[A-Za-z])\/(?=[A-Za-z가-힣])|(?<=[가-힣])\/(?=[A-Za-z])/g, ' ')
     .replace(/<([^<>]{1,40})>/g, '$1.')
@@ -990,7 +991,25 @@ $('view').addEventListener('touchend', e => {
 window.addEventListener('pagehide', () => { if (S.deck) savePos(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && S.deck) savePos(); });
 
+// GitHub Pages lets phones cache this page for up to 10 minutes; if a newer version is online, open it under a fresh URL
+const APP_VERSION = '2026-10-14.2';
+$('verTxt').textContent = APP_VERSION;
+async function checkUpdate(){
+  try{
+    if (location.protocol === 'file:') return;
+    const r = await fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' });
+    const m = (await r.text()).match(/const APP_VERSION = '([^']+)'/);
+    if (!m || m[1] === APP_VERSION || S.playing) return;
+    if (sessionStorage.getItem('ttsc.updTo') === m[1]) return;
+    sessionStorage.setItem('ttsc.updTo', m[1]);
+    if (S.deck) savePos();
+    location.replace(location.pathname + '?v=' + encodeURIComponent(m[1]) + location.hash);
+  }catch(e){}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
+
 boot();
+checkUpdate();
 </script>
 </body>
 </html>
